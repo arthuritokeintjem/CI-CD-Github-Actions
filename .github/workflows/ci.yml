@@ -1,0 +1,40 @@
+# .github/workflows/ci.yml
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+jobs:
+  test-and-train:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.10', '3.11']
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: 'pip'
+          cache-dependency-path: requirements.txt  # aktifkan cache pip built-in
+
+      - name: Install deps
+        run: pip install -r requirements.txt
+
+      - name: Run tests
+        run: pytest -q  # gagal -> exit code non-zero
+
+      - name: Train (smoke)
+        run: python train.py
+
+      - name: Upload artifacts (model & metrics)
+        uses: actions/upload-artifact@v4
+        with:
+          name: model-and-metrics
+          path: artifacts/

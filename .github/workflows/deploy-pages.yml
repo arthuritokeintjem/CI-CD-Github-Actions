@@ -1,0 +1,56 @@
+# .github/workflows/deploy-pages.yml
+name: Deploy Pages
+
+on:
+  workflow_run:
+    workflows: [ "CI" ]
+    types: [ "completed" ]
+    branches: [ "main" ]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
+
+jobs:
+  build-report:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download model & metrics
+        uses: actions/download-artifact@v4
+        with:
+          name: model-and-metrics
+          path: artifacts
+
+      - name: Generate HTML report
+        run: |
+          python - <<'PY'
+          import json, pathlib
+          m = json.load(open('artifacts/metrics.json'))
+          html = f"<h1>CI Metrics</h1><p>Accuracy: {m['accuracy']:.3f}</p>"
+          pathlib.Path('public').mkdir(exist_ok=True)
+          open('public/index.html','w').write(html)
+          PY
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+
+  deploy:
+    needs: build-report
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
