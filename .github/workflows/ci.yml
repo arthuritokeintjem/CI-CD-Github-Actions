@@ -1,5 +1,4 @@
-# .github/workflows/ci.yml
-name: CI
+name: CI + Deploy
 
 on:
   push:
@@ -9,34 +8,42 @@ on:
 jobs:
   test-and-train:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ['3.10', '3.11']
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: '3.11'
           cache: 'pip'
-          cache-dependency-path: requirements.txt  # aktifkan cache pip built-in
-
-      - name: Install deps
-        run: pip install -r requirements.txt
-
-      - name: Run tests
-        run: pytest -q  # gagal -> exit code non-zero
-
-      - name: Train (smoke)
-        run: python train.py
-
-      # ...
-      - name: Upload artifacts (model & metrics)
-        if: ${{ matrix.python-version == '3.11' }}   # <— hanya job Python 3.11 yang upload
-        uses: actions/upload-artifact@v4
+          cache-dependency-path: requirements.txt
+      - run: pip install -r requirements.txt
+      - run: pytest -q
+      - run: python train.py
+      - uses: actions/upload-artifact@v4
         with:
           name: model-and-metrics
           path: artifacts/
+
+  deploy-pages:
+    needs: test-and-train
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: model-and-metrics
+          path: artifacts
+      - name: Generate HTML report
+        run: |
+          python - <<'PY'
+          import json, pathlib
+          m = json.load(open('artifacts/metrics.json'))
+          pathlib.Path('public').mkdir(exist_ok=True)
+          open('public/index.html','w').write(f"<h1>Accuracy: {m['accuracy']:.3f}</h1>")
+          PY
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+      - id: deployment
+        uses: actions/deploy-pages@v4
