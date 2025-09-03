@@ -61,12 +61,25 @@ jobs:
       - name: Generate HTML report
         run: |
           python - <<'PY'
-          import json, pathlib
-          m = json.load(open('artifacts/metrics.json'))
+          import json, pathlib, base64
+
+          metrics = json.load(open('artifacts/metrics.json'))
+          img_data = open("artifacts/confusion_matrix.png","rb").read()
+          img_b64 = base64.b64encode(img_data).decode("utf-8")
+
+          html = f"""
+          <h1>CI Metrics Report</h1>
+          <ul>
+            <li><b>Accuracy:</b> {metrics['accuracy']:.3f}</li>
+            <li><b>RMSE:</b> {metrics['rmse']:.3f}</li>
+            <li><b>MAPE:</b> {metrics['mape']:.2f}%</li>
+          </ul>
+          <h2>Confusion Matrix</h2>
+          <img src="data:image/png;base64,{img_b64}" />
+          """
+
           pathlib.Path('public').mkdir(exist_ok=True)
-          open('public/index.html','w').write(
-              f"<h1>CI Metrics</h1><p>Accuracy: {m['accuracy']:.3f}</p>"
-          )
+          open('public/index.html','w').write(html)
           PY
 
       - name: Upload Pages artifact
